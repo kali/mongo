@@ -25,8 +25,8 @@
 #include "cmdline.h"
 #include "clientcursor.h"
 
-#define DEBUGQO(x) cout << x << endl;
-//#define DEBUGQO(x)
+//#define DEBUGQO(x) cout << x << endl;
+#define DEBUGQO(x)
 
 namespace mongo {
 
@@ -346,7 +346,6 @@ doneCheckOrder:
         return false;
     }
 
-
     void QueryPlanSet::addHint( IndexDetails &id ) {
         if ( !_min.isEmpty() || !_max.isEmpty() ) {
             string errmsg;
@@ -358,35 +357,20 @@ doneCheckOrder:
         _plans.push_back( QueryPlanPtr( new QueryPlan( d, d->idxNo(id), *_frsp, _originalFrsp.get(), _originalQuery, _order, _mustAssertOnYieldFailure, _min, _max ) ) );
     }
 
-    Hint::Hint( const BSONElement& hint, NamespaceDetails *d ) :
-        _indexDetails( 0 ),
+    Hint::Hint( const BSONElement& hint ) :
+        _hint( new BSONElement( hint )),
         _ranges( ) {
         // returns an IndexDetails * for a hint, 0 if hint is $natural.
         // hint must not be eoo()
         massert( 13292, "hint eoo", !hint.eoo() );
-        if( hint.type() == String ) {
-            _indexDetails = parseIndexName( hint.valuestr(), d);
-        } else if ( hint.type() == Object ) {
+        if ( hint.type() == Object ) {
             BSONObj hintobj = hint.embeddedObject();
-            uassert( 10112 ,  "bad hint", !hintobj.isEmpty() );
-            if ( !strcmp( hintobj.firstElementFieldName(), "$natural" ) ) {
-                _indexDetails = 0;
-            } else if (hintobj.firstElementFieldName()[0] == '$') {
+            if ( strcmp( hintobj.firstElementFieldName(), "$natural" ) && hintobj.firstElementFieldName()[0] == '$') {
                 // extended format
                 BSONObjIterator i( hintobj );
                 while( i.more() ) {
                     BSONElement e = i.next();
-                    if ( !strcmp( e.fieldName(), "$index" ) ) {
-                        if( e.type() == String) {
-                            _indexDetails = parseIndexName( e.valuestr(), d);
-                        } else if ( e.type() == Object ) {
-                            if ( e.eoo() || !strcmp( e.embeddedObject().firstElementFieldName(), "$natural" ) ) {
-                                _indexDetails = 0;
-                            } else {
-                                _indexDetails = parseIndexObject( e.embeddedObject(), d );
-                            }
-                        }
-                    } else if ( !strcmp( e.fieldName(), "$range" ) && e.type() == Object ) {
+                    if ( !strcmp( e.fieldName(), "$range" ) && e.type() == Object ) {
                         BSONObjIterator rangeIt( e.embeddedObject());
                         while( rangeIt.more() ) {
                             BSONElement range = rangeIt.next();
@@ -396,10 +380,41 @@ doneCheckOrder:
                         }
                     }
                 }
-            } else {
-                _indexDetails = parseIndexObject( hint.embeddedObject(), d );
             }
         }
+    }
+
+    IndexDetails* Hint::indexDetails( NamespaceDetails *d ) {
+        if( _hint->type() == String ) {
+            return parseIndexName( _hint->valuestr(), d);
+        } else if ( _hint->type() == Object ) {
+            BSONObj hintobj = _hint->embeddedObject();
+            uassert( 10112 ,  "bad hint", !hintobj.isEmpty() );
+            if ( !strcmp( hintobj.firstElementFieldName(), "$natural" ) ) {
+                return 0;
+            } else if (hintobj.firstElementFieldName()[0] == '$') {
+                // extended format
+                BSONObjIterator i( hintobj );
+                while( i.more() ) {
+                    BSONElement e = i.next();
+                    if ( !strcmp( e.fieldName(), "$index" ) ) {
+                        if( e.type() == String) {
+                            return parseIndexName( e.valuestr(), d );
+                        } else if ( e.type() == Object ) {
+                            if ( e.eoo() || !strcmp( e.embeddedObject().firstElementFieldName(), "$natural" ) ) {
+                                return 0;
+                            } else {
+                                return parseIndexObject( e.embeddedObject(), d );
+                            }
+                        }
+                    }
+                }
+            } else {
+                // classical spec
+                return parseIndexObject( _hint->embeddedObject(), d );
+            }
+        }
+        return 0;
     }
 
     IndexDetails* Hint::parseIndexName( string hintstr, NamespaceDetails *d ) {
@@ -447,9 +462,10 @@ doneCheckOrder:
         BSONElement hint = _hint.firstElement();
         if ( !hint.eoo() ) {
             _mayRecordPlan = false;
-            Hint parsedHint(hint, d);
-            if ( parsedHint.indexDetails() ) {
-                addHint( *parsedHint.indexDetails() );
+            Hint parsedHint(hint);
+            IndexDetails *id = parsedHint.indexDetails(d);
+            if ( id ) {
+                addHint( *id );
             }
             else {
                 massert( 10366 ,  "natural order cannot be specified with $min/$max", _min.isEmpty() && _max.isEmpty() );
@@ -1030,11 +1046,12 @@ doneCheckOrder:
             return true;
         }
         if ( !hint.eoo() ) {
-            Hint parsedHint(hint, nsd);
-            if ( !parsedHint.indexDetails() ) {
+            Hint parsedHint(hint);
+            IndexDetails *id = parsedHint.indexDetails(nsd);
+            if ( !id) {
                 return true;
             }
-            return QueryUtilIndexed::uselessOr( *_org, nsd, nsd->idxNo( *parsedHint.indexDetails() ) );
+            return QueryUtilIndexed::uselessOr( *_org, nsd, nsd->idxNo( *id ) );
         }
         return QueryUtilIndexed::uselessOr( *_org, nsd, -1 );
     }

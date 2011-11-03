@@ -34,14 +34,14 @@ namespace mongo {
     /** A storage for parsed hint specification. */
     class Hint {
     public:
-        Hint( const BSONElement& hint, NamespaceDetails *d );
-        IndexDetails* indexDetails() const { return _indexDetails; };
+        Hint( const BSONElement& hint );
+        IndexDetails* indexDetails(NamespaceDetails *d);
 
     private:
         IndexDetails* parseIndexName( string hintstr, NamespaceDetails *d );
         IndexDetails* parseIndexObject( const BSONObj &hintobj, NamespaceDetails *d );
 
-        IndexDetails* _indexDetails;
+        auto_ptr<BSONElement> _hint;
         set<string> _ranges;
     };
 
