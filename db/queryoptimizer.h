@@ -31,6 +31,20 @@ namespace mongo {
     class IndexType;
     class ElapsedTracker;
 
+    /** A storage for parsed hint specification. */
+    class Hint {
+    public:
+        Hint( const BSONElement& hint, NamespaceDetails *d );
+        IndexDetails* indexDetails() const { return _indexDetails; };
+
+    private:
+        IndexDetails* parseIndexName( string hintstr, NamespaceDetails *d );
+        IndexDetails* parseIndexObject( const BSONObj &hintobj, NamespaceDetails *d );
+
+        IndexDetails* _indexDetails;
+        set<string> _ranges;
+    };
+
     /** A plan for executing a query using the given index spec and FieldRangeSet. */
     class QueryPlan : boost::noncopyable {
     public:

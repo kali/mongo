@@ -25,8 +25,8 @@
 #include "cmdline.h"
 #include "clientcursor.h"
 
-//#define DEBUGQO(x) cout << x << endl;
-#define DEBUGQO(x)
+#define DEBUGQO(x) cout << x << endl;
+//#define DEBUGQO(x)
 
 namespace mongo {
 
@@ -358,46 +358,85 @@ doneCheckOrder:
         _plans.push_back( QueryPlanPtr( new QueryPlan( d, d->idxNo(id), *_frsp, _originalFrsp.get(), _originalQuery, _order, _mustAssertOnYieldFailure, _min, _max ) ) );
     }
 
-    // returns an IndexDetails * for a hint, 0 if hint is $natural.
-    // hint must not be eoo()
-    IndexDetails *parseHint( const BSONElement &hint, NamespaceDetails *d ) {
+    Hint::Hint( const BSONElement& hint, NamespaceDetails *d ) :
+        _indexDetails( 0 ),
+        _ranges( ) {
+        // returns an IndexDetails * for a hint, 0 if hint is $natural.
+        // hint must not be eoo()
         massert( 13292, "hint eoo", !hint.eoo() );
         if( hint.type() == String ) {
-            string hintstr = hint.valuestr();
-            NamespaceDetails::IndexIterator i = d->ii();
-            while( i.more() ) {
-                IndexDetails& ii = i.next();
-                if ( ii.indexName() == hintstr ) {
-                    return &ii;
-                }
-            }
-        }
-        else if( hint.type() == Object ) {
+            _indexDetails = parseIndexName( hint.valuestr(), d);
+        } else if ( hint.type() == Object ) {
             BSONObj hintobj = hint.embeddedObject();
             uassert( 10112 ,  "bad hint", !hintobj.isEmpty() );
             if ( !strcmp( hintobj.firstElementFieldName(), "$natural" ) ) {
-                return 0;
-            }
-            NamespaceDetails::IndexIterator i = d->ii();
-            while( i.more() ) {
-                IndexDetails& ii = i.next();
-                if( ii.keyPattern().woCompare(hintobj) == 0 ) {
-                    return &ii;
+                _indexDetails = 0;
+            } else if (hintobj.firstElementFieldName()[0] == '$') {
+                // extended format
+                BSONObjIterator i( hintobj );
+                while( i.more() ) {
+                    BSONElement e = i.next();
+                    if ( !strcmp( e.fieldName(), "$index" ) ) {
+                        if( e.type() == String) {
+                            _indexDetails = parseIndexName( e.valuestr(), d);
+                        } else if ( e.type() == Object ) {
+                            if ( e.eoo() || !strcmp( e.embeddedObject().firstElementFieldName(), "$natural" ) ) {
+                                _indexDetails = 0;
+                            } else {
+                                _indexDetails = parseIndexObject( e.embeddedObject(), d );
+                            }
+                        }
+                    } else if ( !strcmp( e.fieldName(), "$range" ) && e.type() == Object ) {
+                        BSONObjIterator rangeIt( e.embeddedObject());
+                        while( rangeIt.more() ) {
+                            BSONElement range = rangeIt.next();
+                            if (range.type() == Bool && range.boolean() ) {
+                                _ranges.insert( range.fieldName() );
+                            }
+                        }
+                    }
                 }
+            } else {
+                _indexDetails = parseIndexObject( hint.embeddedObject(), d );
+            }
+        }
+    }
+
+    IndexDetails* Hint::parseIndexName( string hintstr, NamespaceDetails *d ) {
+        NamespaceDetails::IndexIterator i = d->ii();
+        while( i.more() ) {
+            IndexDetails& ii = i.next();
+            if ( ii.indexName() == hintstr ) {
+                return &ii;
+            }
+        }
+        return 0;
+    }
+
+    IndexDetails* Hint::parseIndexObject( const BSONObj &hintobj, NamespaceDetails *d) {
+        if ( !strcmp( hintobj.firstElementFieldName(), "$natural" ) ) {
+            return 0;
+        }
+        NamespaceDetails::IndexIterator i = d->ii();
+        while( i.more() ) {
+            IndexDetails& ii = i.next();
+            if( ii.keyPattern().woCompare(hintobj) == 0 ) {
+                return &ii;
             }
         }
         uassert( 10113 ,  "bad hint", false );
         return 0;
     }
 
+
     void QueryPlanSet::init() {
-        DEBUGQO( "QueryPlanSet::init " << ns << "\t" << _originalQuery );
         _runner.reset();
         _plans.clear();
         _mayRecordPlan = true;
         _usingPrerecordedPlan = false;
 
         const char *ns = _frsp->ns();
+        DEBUGQO( "QueryPlanSet::init " << ns << "\t" << _originalQuery );
         NamespaceDetails *d = nsdetails( ns );
         if ( !d || !_frsp->matchPossible() ) {
             // Table scan plan, when no matches are possible
@@ -408,9 +447,9 @@ doneCheckOrder:
         BSONElement hint = _hint.firstElement();
         if ( !hint.eoo() ) {
             _mayRecordPlan = false;
-            IndexDetails *id = parseHint( hint, d );
-            if ( id ) {
-                addHint( *id );
+            Hint parsedHint(hint, d);
+            if ( parsedHint.indexDetails() ) {
+                addHint( *parsedHint.indexDetails() );
             }
             else {
                 massert( 10366 ,  "natural order cannot be specified with $min/$max", _min.isEmpty() && _max.isEmpty() );
@@ -991,11 +1030,11 @@ doneCheckOrder:
             return true;
         }
         if ( !hint.eoo() ) {
-            IndexDetails *id = parseHint( hint, nsd );
-            if ( !id ) {
+            Hint parsedHint(hint, nsd);
+            if ( !parsedHint.indexDetails() ) {
                 return true;
             }
-            return QueryUtilIndexed::uselessOr( *_org, nsd, nsd->idxNo( *id ) );
+            return QueryUtilIndexed::uselessOr( *_org, nsd, nsd->idxNo( *parsedHint.indexDetails() ) );
         }
         return QueryUtilIndexed::uselessOr( *_org, nsd, -1 );
     }
