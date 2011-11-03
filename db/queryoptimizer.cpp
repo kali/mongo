@@ -422,6 +422,7 @@ doneCheckOrder:
                 return &ii;
             }
         }
+        uassert( 10113 ,  "bad hint", false );
         return 0;
     }
 
@@ -436,7 +437,7 @@ doneCheckOrder:
                 return &ii;
             }
         }
-        uassert( 10113 ,  "bad hint", false );
+        uassert( 15910 ,  "bad hint", false );
         return 0;
     }
 
