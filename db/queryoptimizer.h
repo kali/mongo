@@ -275,7 +275,7 @@ namespace mongo {
                       const BSONObj &originalQuery,
                       const BSONObj &order,
                       bool mustAssertOnYieldFailure = true,
-                      const BSONElement *hint = 0,
+                      shared_ptr<Hint> hint = shared_ptr<Hint>(),
                       bool honorRecordedPlan = true,
                       const BSONObj &min = BSONObj(),
                       const BSONObj &max = BSONObj(),
@@ -380,7 +380,7 @@ namespace mongo {
         PlanSet _plans;
         bool _mayRecordPlan;
         bool _usingPrerecordedPlan;
-        BSONObj _hint;
+        shared_ptr<Hint> _hint;
         BSONObj _order;
         long long _oldNScanned;
         bool _honorRecordedPlan;
@@ -467,7 +467,7 @@ namespace mongo {
         }
         shared_ptr<QueryOp> nextOpBeginningClause();
         shared_ptr<QueryOp> nextOpHandleEndOfClause();
-        bool uselessOr( const BSONElement &hint ) const;
+        bool uselessOr() const;
         const char * _ns;
         bool _or;
         BSONObj _query;
@@ -476,7 +476,7 @@ namespace mongo {
         int _i;
         bool _honorRecordedPlan;
         bool _bestGuessOnly;
-        BSONObj _hint;
+        shared_ptr<Hint> _hint;
         bool _mayYield;
         bool _tableScanned;
         shared_ptr<QueryOp> _baseOp;

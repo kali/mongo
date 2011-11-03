@@ -309,14 +309,14 @@ doneCheckOrder:
         _init();
     }    
 
-    QueryPlanSet::QueryPlanSet( const char *ns, auto_ptr<FieldRangeSetPair> frsp, auto_ptr<FieldRangeSetPair> originalFrsp, const BSONObj &originalQuery, const BSONObj &order, bool mustAssertOnYieldFailure, const BSONElement *hint, bool honorRecordedPlan, const BSONObj &min, const BSONObj &max, bool bestGuessOnly, bool mayYield ) :
+    QueryPlanSet::QueryPlanSet( const char *ns, auto_ptr<FieldRangeSetPair> frsp, auto_ptr<FieldRangeSetPair> originalFrsp, const BSONObj &originalQuery, const BSONObj &order, bool mustAssertOnYieldFailure, shared_ptr<Hint> hint, bool honorRecordedPlan, const BSONObj &min, const BSONObj &max, bool bestGuessOnly, bool mayYield ) :
         _ns(ns),
         _originalQuery( originalQuery ),
         _frsp( frsp ),
         _originalFrsp( originalFrsp ),
         _mayRecordPlan( true ),
         _usingPrerecordedPlan( false ),
-        _hint( BSONObj() ),
+        _hint( hint ),
         _order( order.getOwned() ),
         _oldNScanned( 0 ),
         _honorRecordedPlan( honorRecordedPlan ),
@@ -326,9 +326,6 @@ doneCheckOrder:
         _mayYield( mayYield ),
 	    _yieldSometimesTracker( 256, 20 ),
         _mustAssertOnYieldFailure( mustAssertOnYieldFailure ) {
-        if ( hint && !hint->eoo() ) {
-            _hint = hint->wrap();
-        }
         init();
     }
 
@@ -459,11 +456,9 @@ doneCheckOrder:
             return;
         }
 
-        BSONElement hint = _hint.firstElement();
-        if ( !hint.eoo() ) {
+        if ( _hint.get() ) {
             _mayRecordPlan = false;
-            Hint parsedHint(hint);
-            IndexDetails *id = parsedHint.indexDetails(d);
+            IndexDetails *id = _hint->indexDetails(d);
             if ( id ) {
                 addHint( *id );
             }
@@ -566,7 +561,7 @@ doneCheckOrder:
             return;
         }
 
-        bool normalQuery = _hint.isEmpty() && _min.isEmpty() && _max.isEmpty();
+        bool normalQuery = !_hint.get() && _min.isEmpty() && _max.isEmpty();
 
         PlanSet plans;
         QueryPlanPtr optimalPlan;
@@ -907,7 +902,7 @@ doneCheckOrder:
         _i(),
         _honorRecordedPlan( honorRecordedPlan ),
         _bestGuessOnly( bestGuessOnly ),
-        _hint( ( hint && !hint->eoo() ) ? hint->wrap() : BSONObj() ),
+        _hint( ( hint && !hint->eoo() ) ? new Hint( *hint ) : 0 ),
         _mayYield( mayYield ),
         _tableScanned() {
         if ( !order.isEmpty() || !min.isEmpty() || !max.isEmpty() ) {
@@ -919,14 +914,14 @@ doneCheckOrder:
             if ( !_org->getSpecial().empty() ) {
                 _or = false;
             }
-            else if ( uselessOr( _hint.firstElement() ) ) {
-                _or = false;   
+            else if ( uselessOr() ) {
+                _or = false;
             }
         }
         // if _or == false, don't use or clauses for index selection
         if ( !_or ) {
             auto_ptr<FieldRangeSetPair> frsp( new FieldRangeSetPair( ns, _query, true ) );
-            _currentQps.reset( new QueryPlanSet( ns, frsp, auto_ptr<FieldRangeSetPair>(), _query, order, false, hint, honorRecordedPlan, min, max, _bestGuessOnly, _mayYield ) );
+            _currentQps.reset( new QueryPlanSet( ns, frsp, auto_ptr<FieldRangeSetPair>(), _query, order, false, _hint, honorRecordedPlan, min, max, _bestGuessOnly, _mayYield ) );
         }
         else {
             BSONElement e = _query.getField( "$or" );
@@ -943,8 +938,7 @@ doneCheckOrder:
         ++_i;
         auto_ptr<FieldRangeSetPair> frsp( _org->topFrsp() );
         auto_ptr<FieldRangeSetPair> originalFrsp( _org->topFrspOriginal() );
-        BSONElement hintElt = _hint.firstElement();
-        _currentQps.reset( new QueryPlanSet( _ns, frsp, originalFrsp, _query, BSONObj(), true, &hintElt, _honorRecordedPlan, BSONObj(), BSONObj(), _bestGuessOnly, _mayYield ) );
+        _currentQps.reset( new QueryPlanSet( _ns, frsp, originalFrsp, _query, BSONObj(), true, _hint, _honorRecordedPlan, BSONObj(), BSONObj(), _bestGuessOnly, _mayYield ) );
         shared_ptr<QueryOp> ret( _currentQps->runOp( op ) );
         if ( ! ret->complete() )
             throw MsgAssertionException( ret->exception() );
@@ -985,8 +979,7 @@ doneCheckOrder:
 	        ++_i;
     	    auto_ptr<FieldRangeSetPair> frsp( _org->topFrsp() );
         	auto_ptr<FieldRangeSetPair> originalFrsp( _org->topFrspOriginal() );
-	        BSONElement hintElt = _hint.firstElement();
-    	    _currentQps.reset( new QueryPlanSet( _ns, frsp, originalFrsp, _query, BSONObj(), true, &hintElt, _honorRecordedPlan, BSONObj(), BSONObj(), _bestGuessOnly, _mayYield ) );
+    	    _currentQps.reset( new QueryPlanSet( _ns, frsp, originalFrsp, _query, BSONObj(), true, _hint, _honorRecordedPlan, BSONObj(), BSONObj(), _bestGuessOnly, _mayYield ) );
             op = nextOpHandleEndOfClause();
             if ( !op->complete() ) {
              	return op;
@@ -1040,14 +1033,13 @@ doneCheckOrder:
         return _currentQps->firstPlan()->newCursor();
     }
 
-    bool MultiPlanScanner::uselessOr( const BSONElement &hint ) const {
+    bool MultiPlanScanner::uselessOr() const {
         NamespaceDetails *nsd = nsdetails( _ns );
         if ( !nsd ) {
             return true;
         }
-        if ( !hint.eoo() ) {
-            Hint parsedHint(hint);
-            IndexDetails *id = parsedHint.indexDetails(nsd);
+        if ( _hint.get() ) {
+            IndexDetails *id = _hint->indexDetails(nsd);
             if ( !id) {
                 return true;
             }
