@@ -418,7 +418,8 @@ namespace QueryOptimizerTests {
                 BSONElement e = b.firstElement();
                 auto_ptr< FieldRangeSetPair > frsp( new FieldRangeSetPair( ns(), BSON( "a" << 1 ) ) );
                 auto_ptr< FieldRangeSetPair > frspOrig( new FieldRangeSetPair( *frsp ) );
-                QueryPlanSet s( ns(), frsp, frspOrig, BSON( "a" << 1 ), BSON( "b" << 1 ), true, &e );
+                shared_ptr<Hint> hint(new Hint(e));
+                QueryPlanSet s( ns(), frsp, frspOrig, BSON( "a" << 1 ), BSON( "b" << 1 ), true, hint );
                 ASSERT_EQUALS( 1, s.nPlans() );
             }
         };
@@ -432,7 +433,8 @@ namespace QueryOptimizerTests {
                 BSONElement e = b.firstElement();
                 auto_ptr< FieldRangeSetPair > frsp( new FieldRangeSetPair( ns(), BSON( "a" << 1 ) ) );
                 auto_ptr< FieldRangeSetPair > frspOrig( new FieldRangeSetPair( *frsp ) );
-                QueryPlanSet s( ns(), frsp, frspOrig, BSON( "a" << 1 ), BSON( "b" << 1 ), true, &e );
+                shared_ptr<Hint> hint(new Hint(e));
+                QueryPlanSet s( ns(), frsp, frspOrig, BSON( "a" << 1 ), BSON( "b" << 1 ), true, hint );
                 ASSERT_EQUALS( 1, s.nPlans() );
             }
         };
@@ -446,7 +448,8 @@ namespace QueryOptimizerTests {
                 BSONElement e = b.firstElement();
                 auto_ptr< FieldRangeSetPair > frsp( new FieldRangeSetPair( ns(), BSON( "a" << 1 ) ) );
                 auto_ptr< FieldRangeSetPair > frspOrig( new FieldRangeSetPair( *frsp ) );
-                QueryPlanSet s( ns(), frsp, frspOrig, BSON( "a" << 1 ), BSON( "b" << 1 ), true, &e );
+                shared_ptr<Hint> hint(new Hint(e));
+                QueryPlanSet s( ns(), frsp, frspOrig, BSON( "a" << 1 ), BSON( "b" << 1 ), true, hint );
                 ASSERT_EQUALS( 1, s.nPlans() );
             }
         };
@@ -470,7 +473,8 @@ namespace QueryOptimizerTests {
                 BSONElement e = b.firstElement();
                 auto_ptr< FieldRangeSetPair > frsp( new FieldRangeSetPair( ns(), BSON( "a" << 1 ) ) );
                 auto_ptr< FieldRangeSetPair > frspOrig( new FieldRangeSetPair( *frsp ) );
-                ASSERT_EXCEPTION( QueryPlanSet s( ns(), frsp, frspOrig, BSON( "a" << 1 ), BSON( "b" << 1 ), true, &e ),
+                shared_ptr<Hint> hint(new Hint(e));
+                ASSERT_EXCEPTION( QueryPlanSet s( ns(), frsp, frspOrig, BSON( "a" << 1 ), BSON( "b" << 1 ), true, hint ),
                                   AssertionException );
             }
         };
@@ -645,7 +649,8 @@ namespace QueryOptimizerTests {
                 BSONElement hintElt = hint.firstElement();
                 auto_ptr< FieldRangeSetPair > frsp2( new FieldRangeSetPair( ns(), BSON( "a" << 4 ) ) );
                 auto_ptr< FieldRangeSetPair > frspOrig2( new FieldRangeSetPair( *frsp2 ) );
-                QueryPlanSet s2( ns(), frsp2, frspOrig2, BSON( "a" << 4 ), BSON( "b" << 1 ), true, &hintElt );
+                shared_ptr<Hint> parsedHint(new Hint(hintElt));
+                QueryPlanSet s2( ns(), frsp2, frspOrig2, BSON( "a" << 4 ), BSON( "b" << 1 ), true, parsedHint );
                 TestOp newOriginal;
                 s2.runOp( newOriginal );
                 // No plan recorded when a hint is used.
@@ -849,7 +854,8 @@ namespace QueryOptimizerTests {
                 BSONElement hintElt = hint.firstElement();
                 auto_ptr< FieldRangeSetPair > frsp( new FieldRangeSetPair( ns(), fromjson( "{a:{$in:[2,3,6,9,11]}}" ) ) );
                 auto_ptr< FieldRangeSetPair > frspOrig( new FieldRangeSetPair( *frsp ) );
-                QueryPlanSet s( ns(), frsp, frspOrig, fromjson( "{a:{$in:[2,3,6,9,11]}}" ), BSONObj(), true, &hintElt );
+                shared_ptr<Hint> parsedHint(new Hint(hintElt));
+                QueryPlanSet s( ns(), frsp, frspOrig, fromjson( "{a:{$in:[2,3,6,9,11]}}" ), BSONObj(), true, parsedHint );
                 QueryPlan qp( nsd(), 1, s.frsp(), s.originalFrsp(), fromjson( "{a:{$in:[2,3,6,9,11]}}" ), BSONObj() );
                 boost::shared_ptr<Cursor> c = qp.newCursor();
                 double expected[] = { 2, 3, 6, 9 };
@@ -862,7 +868,7 @@ namespace QueryOptimizerTests {
                 {
                     auto_ptr< FieldRangeSetPair > frsp( new FieldRangeSetPair( ns(), fromjson( "{a:{$in:[2,3,6,9,11]}}" ) ) );
                     auto_ptr< FieldRangeSetPair > frspOrig( new FieldRangeSetPair( *frsp ) );
-                    QueryPlanSet s( ns(), frsp, frspOrig, fromjson( "{a:{$in:[2,3,6,9,11]}}" ), BSON( "a" << -1 ), true, &hintElt );
+                    QueryPlanSet s( ns(), frsp, frspOrig, fromjson( "{a:{$in:[2,3,6,9,11]}}" ), BSON( "a" << -1 ), true, parsedHint );
                     QueryPlan qp( nsd(), 1, s.frsp(), s.originalFrsp(), fromjson( "{a:{$in:[2,3,6,9,11]}}" ), BSON( "a" << -1 ) );
                     boost::shared_ptr<Cursor> c = qp.newCursor();
                     double expected[] = { 9, 6, 3, 2 };
