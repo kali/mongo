@@ -430,6 +430,7 @@ namespace mongo {
                 lower = addObj( b.obj() ).firstElement();
             }
         }
+        cerr << toString() << "\n";
     }
 
     void FieldRange::finishOperation( const vector<FieldInterval> &newIntervals, const FieldRange &other ) {
@@ -464,7 +465,7 @@ namespace mongo {
     }
 
     const FieldRange &FieldRange::operator&=( const FieldRange &other ) {
-        if ( !_singleKey && !_rangeHint && nontrivial() ) {
+        if ( !_singleKey && !_rangeHint && !other._rangeHint && nontrivial() ) {
             if ( other <= *this ) {
              	*this = other;
             }
@@ -648,7 +649,7 @@ namespace mongo {
 
     string FieldRange::toString() const {
         StringBuilder buf;
-        buf << "(FieldRange special: " << _special << " singleKey: " << _special << " intervals: ";
+        buf << "(FieldRange special: " << _special << " singleKey: " << _singleKey << " rangeHint: " << _rangeHint << " intervals: ";
         for( vector<FieldInterval>::const_iterator i = _intervals.begin(); i != _intervals.end(); ++i ) {
             buf << i->toString();
         }
