@@ -430,7 +430,6 @@ namespace mongo {
                 lower = addObj( b.obj() ).firstElement();
             }
         }
-        cerr << toString() << "\n";
     }
 
     void FieldRange::finishOperation( const vector<FieldInterval> &newIntervals, const FieldRange &other ) {
