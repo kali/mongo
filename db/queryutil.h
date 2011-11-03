@@ -65,7 +65,7 @@ namespace mongo {
      */
     class FieldRange {
     public:
-        FieldRange( const BSONElement &e, bool singleKey, bool isNot=false, bool optimize=true, Hint *hint=0 );
+        FieldRange( const BSONElement &e, bool singleKey, bool isNot=false, bool optimize=true, bool rangeHint=false );
 
         /** @return Range intersection with 'other'. */
         const FieldRange &operator&=( const FieldRange &other );
@@ -117,6 +117,7 @@ namespace mongo {
         vector<BSONObj> _objData;
         string _special;
         bool _singleKey;
+        bool _rangeHint;
     };
 
     /**

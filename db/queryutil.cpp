@@ -156,8 +156,8 @@ namespace mongo {
     }
 
 
-    FieldRange::FieldRange( const BSONElement &e, bool singleKey, bool isNot, bool optimize, Hint *hint )
-    : _singleKey( singleKey ) {
+    FieldRange::FieldRange( const BSONElement &e, bool singleKey, bool isNot, bool optimize, bool rangeHint )
+    : _singleKey( singleKey ), _rangeHint(rangeHint) {
         int op = e.getGtLtOp();
 
         // NOTE with $not, we could potentially form a complementary set of intervals.
@@ -430,7 +430,6 @@ namespace mongo {
                 lower = addObj( b.obj() ).firstElement();
             }
         }
-
     }
 
     void FieldRange::finishOperation( const vector<FieldInterval> &newIntervals, const FieldRange &other ) {
@@ -465,7 +464,7 @@ namespace mongo {
     }
 
     const FieldRange &FieldRange::operator&=( const FieldRange &other ) {
-        if ( !_singleKey && nontrivial() ) {
+        if ( !_singleKey && !_rangeHint && nontrivial() ) {
             if ( other <= *this ) {
              	*this = other;
             }
@@ -793,18 +792,18 @@ namespace mongo {
 
                 int op3 = getGtLtOp( h );
                 if ( op3 == BSONObj::Equality ) {
-                    range( fullname.c_str() ) &= FieldRange( h , _singleKey , isNot , optimize , hint );
+                    range( fullname.c_str() ) &= FieldRange( h , _singleKey , isNot , optimize , hint && hint->isRange(fullname) );
                 }
                 else {
                     BSONObjIterator l( h.embeddedObject() );
                     while ( l.more() ) {
-                        range( fullname.c_str() ) &= FieldRange( l.next() , _singleKey , isNot , optimize , hint );
+                        range( fullname.c_str() ) &= FieldRange( l.next() , _singleKey , isNot , optimize , hint && hint->isRange(fullname) );
                     }
                 }
             }
         }
         else {
-            range( fieldName ) &= FieldRange( f , _singleKey , isNot , optimize , hint );
+            range( fieldName ) &= FieldRange( f , _singleKey , isNot , optimize , hint && hint->isRange( fieldName ));
         }
     }
 

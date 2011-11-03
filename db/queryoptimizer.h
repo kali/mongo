@@ -36,6 +36,7 @@ namespace mongo {
     public:
         Hint( const BSONElement& hint );
         IndexDetails* indexDetails(NamespaceDetails *d);
+        bool isRange(string field) { return _ranges.count(field) > 0; };
 
     private:
         IndexDetails* parseIndexName( string hintstr, NamespaceDetails *d );

@@ -17,4 +17,4 @@ plan = db.test.find(query).hint({ $index : { "v.a" : 1 } }).explain();
 assert.eq([[3, 1.7976931348623157e+308]], plan.indexBounds["v.a"]);
 
 plan = db.test.find(query).hint({ $index : "v.a_1", $range : { "v.a" : true } }).explain();
-//assert.eq(5, plan.indexBounds["v.a"][0][1])
+assert.eq([[3, 5]], plan.indexBounds["v.a"]);
