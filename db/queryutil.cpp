@@ -156,7 +156,7 @@ namespace mongo {
     }
 
 
-    FieldRange::FieldRange( const BSONElement &e, bool singleKey, bool isNot, bool optimize )
+    FieldRange::FieldRange( const BSONElement &e, bool singleKey, bool isNot, bool optimize, Hint *hint )
     : _singleKey( singleKey ) {
         int op = e.getGtLtOp();
 
@@ -768,7 +768,7 @@ namespace mongo {
         }
     }    
     
-    void FieldRangeSet::processOpElement( const char *fieldName, const BSONElement &f, bool isNot, bool optimize ) {
+    void FieldRangeSet::processOpElement( const char *fieldName, const BSONElement &f, bool isNot, bool optimize, Hint *hint ) {
         BSONElement g = f;
         int op2 = g.getGtLtOp();
         if ( op2 == BSONObj::opALL ) {
@@ -793,22 +793,22 @@ namespace mongo {
 
                 int op3 = getGtLtOp( h );
                 if ( op3 == BSONObj::Equality ) {
-                    range( fullname.c_str() ) &= FieldRange( h , _singleKey , isNot , optimize );
+                    range( fullname.c_str() ) &= FieldRange( h , _singleKey , isNot , optimize , hint );
                 }
                 else {
                     BSONObjIterator l( h.embeddedObject() );
                     while ( l.more() ) {
-                        range( fullname.c_str() ) &= FieldRange( l.next() , _singleKey , isNot , optimize );
+                        range( fullname.c_str() ) &= FieldRange( l.next() , _singleKey , isNot , optimize , hint );
                     }
                 }
             }
         }
         else {
-            range( fieldName ) &= FieldRange( f , _singleKey , isNot , optimize );
+            range( fieldName ) &= FieldRange( f , _singleKey , isNot , optimize , hint );
         }
     }
 
-    void FieldRangeSet::processQueryField( const BSONElement &e, bool optimize ) {
+    void FieldRangeSet::processQueryField( const BSONElement &e, bool optimize, Hint *hint ) {
         if ( e.fieldName()[ 0 ] == '$' ) {
             if ( strcmp( e.fieldName(), "$and" ) == 0 ) {
                 uassert( 14816 , "$and expression must be a nonempty array" , e.type() == Array && e.embeddedObject().nFields() > 0 );
@@ -818,7 +818,7 @@ namespace mongo {
                     uassert( 14817 , "$and elements must be objects" , e.type() == Object );
                     BSONObjIterator j( e.embeddedObject() );
                     while( j.more() ) {
-                        processQueryField( j.next(), optimize );
+                        processQueryField( j.next(),  optimize , hint );
                     }
                 }            
             }
@@ -855,30 +855,30 @@ namespace mongo {
                         while( k.more() ) {
                             BSONElement g = k.next();
                             uassert( 13034, "invalid use of $not", g.getGtLtOp() != BSONObj::Equality );
-                            processOpElement( e.fieldName(), g, true, optimize );
+                            processOpElement( e.fieldName(), g, true, optimize , hint );
                         }
                         break;
                     }
                     case RegEx:
-                        processOpElement( e.fieldName(), f, true, optimize );
+                        processOpElement( e.fieldName(), f, true, optimize , hint );
                         break;
                     default:
                         uassert( 13041, "invalid use of $not", false );
                     }
                 }
                 else {
-                    processOpElement( e.fieldName(), f, false, optimize );
+                    processOpElement( e.fieldName(), f, false, optimize , hint );
                 }
             }
         }
     }
 
-    FieldRangeSet::FieldRangeSet( const char *ns, const BSONObj &query, bool singleKey, bool optimize )
+    FieldRangeSet::FieldRangeSet( const char *ns, const BSONObj &query, bool singleKey, bool optimize , Hint *hint)
         : _ns( ns ), _queries( 1, query.getOwned() ), _singleKey( singleKey ) {
         BSONObjIterator i( _queries[ 0 ] );
 
         while( i.more() ) {
-            processQueryField( i.next(), optimize );
+            processQueryField( i.next(), optimize , hint );
         }
     }
     
@@ -1063,7 +1063,7 @@ namespace mongo {
     }
 
     FieldRangeSet *FieldRangeSet::subset( const BSONObj &fields ) const {
-        FieldRangeSet *ret = new FieldRangeSet( _ns, BSONObj(), _singleKey, true );
+        FieldRangeSet *ret = new FieldRangeSet( _ns, BSONObj(), _singleKey, true, 0 );
         BSONObjIterator i( fields );
         while( i.more() ) {
             BSONElement e = i.next();
@@ -1373,7 +1373,7 @@ namespace mongo {
     }
     
     OrRangeGenerator::OrRangeGenerator( const char *ns, const BSONObj &query , bool optimize )
-    : _baseSet( ns, query, optimize ), _orFound() {
+    : _baseSet( ns, query, optimize, 0 ), _orFound() {
         
         BSONObjIterator i( _baseSet.originalQuery() );
         
@@ -1385,7 +1385,7 @@ namespace mongo {
                 while( j.more() ) {
                     BSONElement f = j.next();
                     uassert( 13263, "$or array must contain objects", f.type() == Object );
-                    _orSets.push_back( FieldRangeSetPair( ns, f.embeddedObject(), optimize ) );
+                    _orSets.push_back( FieldRangeSetPair( ns, f.embeddedObject(), optimize, 0 ) );
                     uassert( 13291, "$or may not contain 'special' query", _orSets.back().getSpecial().empty() );
                     _originalOrSets.push_back( _orSets.back() );
                 }

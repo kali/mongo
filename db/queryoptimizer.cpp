@@ -920,7 +920,7 @@ doneCheckOrder:
         }
         // if _or == false, don't use or clauses for index selection
         if ( !_or ) {
-            auto_ptr<FieldRangeSetPair> frsp( new FieldRangeSetPair( ns, _query, true ) );
+            auto_ptr<FieldRangeSetPair> frsp( new FieldRangeSetPair( ns, _query, true, _hint.get() ) );
             _currentQps.reset( new QueryPlanSet( ns, frsp, auto_ptr<FieldRangeSetPair>(), _query, order, false, _hint, honorRecordedPlan, min, max, _bestGuessOnly, _mayYield ) );
         }
         else {
@@ -1269,7 +1269,7 @@ doneCheckOrder:
             return shared_ptr<Cursor>( new MultiCursor( ns, query, sort ) );
         }
         else {
-            auto_ptr<FieldRangeSetPair> frsp( new FieldRangeSetPair( ns, query, true ) );
+            auto_ptr<FieldRangeSetPair> frsp( new FieldRangeSetPair( ns, query, true, 0) );
             auto_ptr<FieldRangeSetPair> origFrsp( new FieldRangeSetPair( *frsp ) );
 
             QueryPlanSet qps( ns, frsp, origFrsp, query, sort, false );

@@ -57,13 +57,15 @@ namespace mongo {
         string toString() const;
     };
 
+    class Hint;
+
     /**
      * An ordered list of FieldIntervals expressing constraints on valid
      * BSONElement values for a field.
      */
     class FieldRange {
     public:
-        FieldRange( const BSONElement &e , bool singleKey , bool isNot=false , bool optimize=true );
+        FieldRange( const BSONElement &e, bool singleKey, bool isNot=false, bool optimize=true, Hint *hint=0 );
 
         /** @return Range intersection with 'other'. */
         const FieldRange &operator&=( const FieldRange &other );
@@ -136,7 +138,7 @@ namespace mongo {
     public:
         friend class OrRangeGenerator;
         friend class FieldRangeVector;
-        FieldRangeSet( const char *ns, const BSONObj &query , bool singleKey , bool optimize=true );
+        FieldRangeSet( const char *ns, const BSONObj &query, bool singleKey, bool optimize=true, Hint *hint=0 );
         
         /** @return true if there is a nontrivial range for the given field. */
         bool hasRange( const char *fieldName ) const {
@@ -209,8 +211,8 @@ namespace mongo {
     private:
         void appendQueries( const FieldRangeSet &other );
         void makeEmpty();
-        void processQueryField( const BSONElement &e, bool optimize );
-        void processOpElement( const char *fieldName, const BSONElement &f, bool isNot, bool optimize );
+        void processQueryField( const BSONElement &e, bool optimize, Hint *hint);
+        void processOpElement( const char *fieldName, const BSONElement &f, bool isNot, bool optimize, Hint *hint );
         static FieldRange *__singleKeyTrivialRange;
         static FieldRange *__multiKeyTrivialRange;
         const FieldRange &trivialRange() const;
@@ -233,8 +235,8 @@ namespace mongo {
      */
     class FieldRangeSetPair {
     public:
-        FieldRangeSetPair( const char *ns, const BSONObj &query, bool optimize=true )
-        :_singleKey( ns, query, true, optimize ), _multiKey( ns, query, false, optimize ) {}
+        FieldRangeSetPair( const char *ns, const BSONObj &query, bool optimize=true, Hint* hint=0 )
+        :_singleKey( ns, query, true, optimize, hint ), _multiKey( ns, query, false, optimize, hint ) {}
 
         /**
          * @return the appropriate single or multi key FieldRangeSet for the specified index.
